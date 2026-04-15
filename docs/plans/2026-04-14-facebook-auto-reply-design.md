@@ -47,10 +47,10 @@ The first service is an **Instant Auto-Reply System** that responds to customer 
 | Frontend Dashboard | Next.js | Vercel (free tier) | ₱0 |
 | Database + Auth | Supabase | Supabase (free tier) | ₱0 |
 | Catalog source | Google Sheets | Client-managed | ₱0 |
-| AI replies | Claude Haiku | Anthropic API | ~₱0–₱50/mo at low volume |
+| AI replies | Gemini Flash | Google AI Studio (free tier) | ₱0 |
 | Facebook integration | Meta Graph API + Webhooks | Meta (free) | ₱0 |
 
-**Target monthly cost:** ₱0–₱50 at MVP scale.
+**Target monthly cost:** ₱0 at MVP scale (Gemini free tier: 1,500 requests/day).
 
 ---
 
@@ -108,7 +108,7 @@ settings
 
 4. If no match:
    → load catalog_cache for tenant
-   → call Claude Haiku:
+   → call Gemini Flash (free tier):
        "Customer said: [message]
         Catalog: [catalog rows]
         Detect the language. Reply in the same language.
