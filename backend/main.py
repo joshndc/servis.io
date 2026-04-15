@@ -99,12 +99,18 @@ async def receive_webhook(request: Request):
 
 @app.post("/sync-catalog")
 async def sync_catalog(request: Request):
+    import gspread.exceptions
     body = await request.json()
     tenant_id = body.get("tenant_id")
     sheet_url = body.get("sheet_url")
     service_account = body.get("service_account")
     if not all([tenant_id, sheet_url, service_account]):
         raise HTTPException(status_code=400, detail="Missing required fields: tenant_id, sheet_url, service_account")
-    from services.sheets import sync_catalog_from_sheet
-    count = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
-    return {"synced": count}
+    try:
+        from services.sheets import sync_catalog_from_sheet
+        count = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
+        return {"synced": count}
+    except gspread.exceptions.SpreadsheetNotFound:
+        raise HTTPException(status_code=400, detail="Sheet not found or not accessible. Check the URL and sharing settings.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")

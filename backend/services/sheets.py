@@ -8,7 +8,7 @@ def parse_sheet_rows(rows: list[list]) -> list[dict]:
     headers = [h.strip().lower() for h in rows[0]]
     result = []
     for row in rows[1:]:
-        if not any(cell.strip() for cell in row if isinstance(cell, str)):
+        if not any(str(cell).strip() for cell in row):
             continue
         item = dict(zip(headers, row))
         disc = item.get("discounted_price", "").strip()
