@@ -127,9 +127,13 @@ async def sync_catalog(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     body = await request.json()
     tenant_id = body.get("tenant_id")
-    sheet_url = body.get("sheet_url")
-    if not all([tenant_id, sheet_url]):
-        raise HTTPException(status_code=400, detail="Missing required fields: tenant_id, sheet_url")
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Missing required field: tenant_id")
+    # Load sheet URL from settings
+    settings = get_settings(tenant_id)
+    sheet_url = (settings or {}).get("google_sheet_id")
+    if not sheet_url:
+        raise HTTPException(status_code=400, detail="No Google Sheet URL configured for this tenant. Set google_sheet_id in settings.")
     # Load service account from file or env
     sa_path = Path(__file__).parent / "service_account.json"
     if sa_path.exists():
