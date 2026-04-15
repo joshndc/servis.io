@@ -47,21 +47,25 @@ def generate_reply(message: str, catalog: list[dict], promos: list[dict] = None,
     promo_section = f"\nActive promos:\n{promos_text}" if promos_text else ""
     history_text = build_history_text(history or [])
     history_section = f"\nConversation so far:\n{history_text}\n" if history_text else ""
-    prompt = f"""You are a friendly customer service assistant for a small Filipino business.
+    system = f"""You are a friendly customer service assistant for a small Filipino business.
 
-Our catalog:
+Catalog:
 {catalog_text}{promo_section}
-{history_section}
-Customer message: {message}
 
-Instructions:
-- Detect the language of the customer's message (English, Tagalog, Taglish, Bisaya, or other Philippine language)
-- Reply in the same language. Default to Taglish if unsure.
-- Use the conversation history above to give contextual, consistent replies
-- Mention relevant products and prices from the catalog if applicable
-- If there are active promos relevant to the customer's question, highlight them
-- Keep the reply short, friendly, and helpful
-- Do not make up products not in the catalog"""
+Rules:
+- Reply in the same language as the customer (English, Tagalog, Taglish, Bisaya, or other PH language). Default to Taglish if unsure.
+- Use conversation history for context and consistency.
+- Mention relevant products and prices. Highlight active promos when relevant.
+- Keep replies short, friendly, and helpful.
+- Never make up products not in the catalog.
+- Output ONLY the reply to the customer. No labels, no explanations."""
+
+    history_messages = []
+    for msg in (history or []):
+        role = "user" if msg.get("role") == "user" else "assistant"
+        history_messages.append({"role": role, "content": msg.get("text", "")})
+
+    messages = history_messages + [{"role": "user", "content": message}]
 
     response = httpx.post(
         ANTHROPIC_URL,
@@ -73,7 +77,8 @@ Instructions:
         json={
             "model": MODEL,
             "max_tokens": 512,
-            "messages": [{"role": "user", "content": prompt}],
+            "system": system,
+            "messages": messages,
         },
         timeout=30,
     )
