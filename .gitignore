@@ -5,3 +5,4 @@ __pycache__/
 node_modules/
 .next/
 .vercel/
+backend/service_account.json

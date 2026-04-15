@@ -118,7 +118,8 @@ async def receive_webhook(request: Request):
 
 @app.post("/sync-catalog")
 async def sync_catalog(request: Request):
-    import gspread.exceptions
+    import json, gspread.exceptions
+    from pathlib import Path
     # Auth check
     token = request.headers.get("X-Admin-Token", "")
     if not ADMIN_TOKEN or token != ADMIN_TOKEN:
@@ -126,9 +127,18 @@ async def sync_catalog(request: Request):
     body = await request.json()
     tenant_id = body.get("tenant_id")
     sheet_url = body.get("sheet_url")
-    service_account = body.get("service_account")
-    if not all([tenant_id, sheet_url, service_account]):
-        raise HTTPException(status_code=400, detail="Missing required fields: tenant_id, sheet_url, service_account")
+    if not all([tenant_id, sheet_url]):
+        raise HTTPException(status_code=400, detail="Missing required fields: tenant_id, sheet_url")
+    # Load service account from file or env
+    sa_path = Path(__file__).parent / "service_account.json"
+    if sa_path.exists():
+        service_account = json.loads(sa_path.read_text())
+    else:
+        import os
+        raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT")
+        if not raw:
+            raise HTTPException(status_code=500, detail="No service account credentials configured")
+        service_account = json.loads(raw)
     try:
         from services.sheets import sync_catalog_from_sheet
         count = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
