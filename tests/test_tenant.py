@@ -10,7 +10,7 @@ for k, v in {
     os.environ.setdefault(k, v)
 
 from unittest.mock import patch, MagicMock
-from services.tenant import get_tenant_by_page_id, get_catalog, get_reply_rules, get_or_create_conversation
+from services.tenant import get_tenant_by_page_id, get_catalog, get_reply_rules, get_or_create_conversation, get_settings
 
 def _result(data):
     m = MagicMock()
@@ -20,8 +20,8 @@ def _result(data):
 def test_get_tenant_by_page_id_not_found():
     with patch("services.tenant.get_supabase") as mock_sb:
         (mock_sb.return_value.table.return_value
-         .select.return_value.eq.return_value.single.return_value
-         .execute.return_value) = _result(None)
+         .select.return_value.eq.return_value.limit.return_value
+         .execute.return_value) = _result([])
         assert get_tenant_by_page_id("missing_page") is None
 
 def test_get_catalog_returns_list():
@@ -45,7 +45,31 @@ def test_get_or_create_conversation_existing():
     existing = {"page_id": "p1", "sender_id": "s1", "status": "open"}
     with patch("services.tenant.get_supabase") as mock_sb:
         (mock_sb.return_value.table.return_value
-         .select.return_value.eq.return_value.eq.return_value
-         .execute.return_value) = _result([existing])
+         .upsert.return_value.execute.return_value) = _result([existing])
         result = get_or_create_conversation("p1", "s1")
         assert result["status"] == "open"
+
+def test_get_settings_found():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .select.return_value.eq.return_value.limit.return_value
+         .execute.return_value) = _result([{"tenant_id": "t1", "welcome_message": "Hi!"}])
+        result = get_settings("t1")
+        assert result["welcome_message"] == "Hi!"
+
+def test_get_settings_not_found():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .select.return_value.eq.return_value.limit.return_value
+         .execute.return_value) = _result([])
+        result = get_settings("missing")
+        assert result is None
+
+def test_update_conversation():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .update.return_value.eq.return_value.eq.return_value
+         .execute.return_value) = _result([{"status": "escalated"}])
+        from services.tenant import update_conversation
+        result = update_conversation("p1", "s1", {"status": "escalated"})
+        assert result["status"] == "escalated"
