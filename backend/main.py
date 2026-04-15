@@ -151,4 +151,5 @@ async def sync_catalog(request: Request):
     except gspread.exceptions.SpreadsheetNotFound:
         raise HTTPException(status_code=400, detail="Sheet not found or not accessible. Check the URL and sharing settings.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        logger.error(f"Sync failed for tenant {tenant_id}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Sync failed: {type(e).__name__}: {str(e)}")
