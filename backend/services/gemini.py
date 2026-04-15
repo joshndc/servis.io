@@ -32,20 +32,32 @@ def build_promos_text(promos: list[dict]) -> str:
         lines.append(line)
     return "\n".join(lines)
 
-def generate_reply(message: str, catalog: list[dict], promos: list[dict] = None) -> str:
+def build_history_text(history: list[dict]) -> str:
+    if not history:
+        return ""
+    lines = []
+    for msg in history:
+        role = "Customer" if msg.get("role") == "user" else "Assistant"
+        lines.append(f"{role}: {msg.get('text', '')}")
+    return "\n".join(lines)
+
+def generate_reply(message: str, catalog: list[dict], promos: list[dict] = None, history: list[dict] = None) -> str:
     catalog_text = build_catalog_text(catalog)
     promos_text = build_promos_text(promos or [])
     promo_section = f"\nActive promos:\n{promos_text}" if promos_text else ""
+    history_text = build_history_text(history or [])
+    history_section = f"\nConversation so far:\n{history_text}\n" if history_text else ""
     prompt = f"""You are a friendly customer service assistant for a small Filipino business.
-
-Customer message: {message}
 
 Our catalog:
 {catalog_text}{promo_section}
+{history_section}
+Customer message: {message}
 
 Instructions:
 - Detect the language of the customer's message (English, Tagalog, Taglish, Bisaya, or other Philippine language)
 - Reply in the same language. Default to Taglish if unsure.
+- Use the conversation history above to give contextual, consistent replies
 - Mention relevant products and prices from the catalog if applicable
 - If there are active promos relevant to the customer's question, highlight them
 - Keep the reply short, friendly, and helpful

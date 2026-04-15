@@ -73,3 +73,16 @@ def update_conversation(page_id: str, sender_id: str, updates: dict) -> dict:
     if not result.data:
         raise ValueError(f"No conversation found for page_id={page_id}, sender_id={sender_id}")
     return result.data[0]
+
+def append_message(page_id: str, sender_id: str, role: str, text: str):
+    """Append a message to the conversation's message_history (keep last 10)."""
+    conv = (get_supabase().table("conversations")
+            .select("message_history")
+            .eq("page_id", page_id)
+            .eq("sender_id", sender_id)
+            .limit(1)
+            .execute())
+    history = conv.data[0].get("message_history") or [] if conv.data else []
+    history.append({"role": role, "text": text})
+    history = history[-10:]  # keep last 10 messages
+    get_supabase().table("conversations").update({"message_history": history}).eq("page_id", page_id).eq("sender_id", sender_id).execute()

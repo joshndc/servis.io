@@ -8,7 +8,7 @@ from typing import Optional
 from config import META_WEBHOOK_VERIFY_TOKEN, META_APP_SECRET, ADMIN_TOKEN
 from services.tenant import (
     get_tenant_by_page_id, get_catalog, get_reply_rules,
-    get_settings, get_promos, get_or_create_conversation, update_conversation
+    get_settings, get_promos, get_or_create_conversation, update_conversation, append_message
 )
 from services.rules import match_rule
 from services.gemini import generate_reply
@@ -68,9 +68,11 @@ async def receive_webhook(request: Request):
                     continue
 
                 conv = get_or_create_conversation(page_id, sender_id)
+                history = conv.get("message_history") or []
+                is_new = not conv.get("last_message")
 
-                # Welcome message for new conversations
-                if not conv.get("detected_language") and settings.get("welcome_message"):
+                # Welcome message — only on very first message
+                if is_new and settings.get("welcome_message"):
                     send_dm(access_token, sender_id, settings["welcome_message"])
 
                 # Handoff check
@@ -85,11 +87,15 @@ async def receive_webhook(request: Request):
                 if rule_reply:
                     send_dm(access_token, sender_id, rule_reply)
                     update_conversation(page_id, sender_id, {"last_message": message_text})
+                    append_message(page_id, sender_id, "user", message_text)
+                    append_message(page_id, sender_id, "assistant", rule_reply)
                     continue
 
-                # AI reply
-                reply = generate_reply(message_text, catalog, promos)
+                # AI reply with conversation history
+                append_message(page_id, sender_id, "user", message_text)
+                reply = generate_reply(message_text, catalog, promos, history)
                 send_dm(access_token, sender_id, reply)
+                append_message(page_id, sender_id, "assistant", reply)
                 update_conversation(page_id, sender_id, {"last_message": message_text, "status": "open"})
 
             # Handle comments
