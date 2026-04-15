@@ -29,10 +29,12 @@ def sync_catalog_from_sheet(tenant_id: str, sheet_url: str, service_account_json
     rows = sheet.get_all_values()
     items = parse_sheet_rows(rows)
 
+    if not items:
+        raise ValueError("Sheet produced zero items — aborting to protect existing catalog")
+
     sb = get_supabase()
     sb.table("catalog_cache").delete().eq("tenant_id", tenant_id).execute()
-    if items:
-        for item in items:
-            item["tenant_id"] = tenant_id
-        sb.table("catalog_cache").insert(items).execute()
+    for item in items:
+        item["tenant_id"] = tenant_id
+    sb.table("catalog_cache").insert(items).execute()
     return len(items)

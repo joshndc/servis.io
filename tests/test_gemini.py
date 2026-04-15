@@ -27,20 +27,16 @@ def test_build_catalog_text_empty():
 
 def test_generate_reply_returns_string():
     catalog = [{"name": "Milk Tea", "price": 80, "description": "Classic", "discounted_price": None}]
-    with patch("google.generativeai.GenerativeModel") as mock_model_class:
-        mock_instance = MagicMock()
-        mock_instance.generate_content.return_value.text = "Meron kaming Milk Tea sa ₱80!"
-        mock_model_class.return_value = mock_instance
+    with patch("services.gemini._model") as mock_model:
+        mock_model.generate_content.return_value.text = "Meron kaming Milk Tea sa ₱80!"
         result = generate_reply("Magkano ang milk tea?", catalog)
         assert isinstance(result, str)
         assert len(result) > 0
 
 def test_generate_reply_includes_catalog_in_prompt():
     catalog = [{"name": "Ube Pandesal", "price": 25, "description": "Fresh", "discounted_price": None}]
-    with patch("google.generativeai.GenerativeModel") as mock_model_class:
-        mock_instance = MagicMock()
-        mock_instance.generate_content.return_value.text = "We have Ube Pandesal!"
-        mock_model_class.return_value = mock_instance
+    with patch("services.gemini._model") as mock_model:
+        mock_model.generate_content.return_value.text = "We have Ube Pandesal!"
         generate_reply("What do you sell?", catalog)
-        call_args = mock_instance.generate_content.call_args[0][0]
+        call_args = mock_model.generate_content.call_args[0][0]
         assert "Ube Pandesal" in call_args

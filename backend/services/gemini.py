@@ -1,5 +1,11 @@
 import google.generativeai as genai
+import logging
 from config import GEMINI_API_KEY
+
+logger = logging.getLogger(__name__)
+
+genai.configure(api_key=GEMINI_API_KEY)
+_model = genai.GenerativeModel("gemini-1.5-flash")
 
 def build_catalog_text(catalog: list[dict]) -> str:
     if not catalog:
@@ -16,8 +22,6 @@ def build_catalog_text(catalog: list[dict]) -> str:
     return "\n".join(lines)
 
 def generate_reply(message: str, catalog: list[dict]) -> str:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
     catalog_text = build_catalog_text(catalog)
     prompt = f"""You are a friendly customer service assistant for a small Filipino business.
 
@@ -34,5 +38,5 @@ Instructions:
 - Do not make up products not in the catalog
 
 Reply:"""
-    response = model.generate_content(prompt)
+    response = _model.generate_content(prompt)
     return response.text.strip()

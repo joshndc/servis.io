@@ -1,4 +1,8 @@
 import os
+import hmac
+import hashlib
+import json
+
 for k, v in {
     "SUPABASE_URL": "https://fake.supabase.co",
     "SUPABASE_SERVICE_ROLE_KEY": "fake-key",
@@ -11,6 +15,7 @@ for k, v in {
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from main import app
+import config
 
 client = TestClient(app)
 
@@ -28,6 +33,20 @@ COMMENT_PAYLOAD = {
     "entry": [{"id": "page_111", "changes": [{"field": "feed", "value": {"item": "comment", "comment_id": "cmt_1", "message": "How much?", "from": {"id": "user_456"}}}]}]
 }
 
+
+def _signed_post(payload: dict) -> object:
+    """Post a webhook payload with a valid X-Hub-Signature-256 header."""
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    sig = "sha256=" + hmac.new(
+        config.META_APP_SECRET.encode(), raw, hashlib.sha256
+    ).hexdigest()
+    return client.post(
+        "/webhook",
+        content=raw,
+        headers={"Content-Type": "application/json", "X-Hub-Signature-256": sig},
+    )
+
+
 def test_dm_sends_welcome_on_first_contact():
     with patch("main.get_tenant_by_page_id", return_value=PAGE), \
          patch("main.get_catalog", return_value=CATALOG), \
@@ -38,7 +57,7 @@ def test_dm_sends_welcome_on_first_contact():
          patch("main.match_rule", return_value=None), \
          patch("main.generate_reply", return_value="Here is our menu!"), \
          patch("main.send_dm") as mock_send:
-        response = client.post("/webhook", json=DM_PAYLOAD)
+        response = _signed_post(DM_PAYLOAD)
         assert response.status_code == 200
         # First call should be the welcome message
         first_call = mock_send.call_args_list[0]
@@ -51,7 +70,7 @@ def test_comment_reply_uses_rule_when_matched():
          patch("main.get_settings", return_value={"welcome_message": None, "handoff_keyword": "human", "comment_reply_mode": "comment"}), \
          patch("main.generate_reply") as mock_gemini, \
          patch("main.send_comment_reply") as mock_comment:
-        response = client.post("/webhook", json=COMMENT_PAYLOAD)
+        response = _signed_post(COMMENT_PAYLOAD)
         assert response.status_code == 200
         mock_gemini.assert_not_called()
         mock_comment.assert_called_once_with("tok", "cmt_1", "Our prices start at ₱80!")
@@ -65,7 +84,7 @@ def test_dm_triggers_gemini_reply():
          patch("main.update_conversation"), \
          patch("main.generate_reply", return_value="Meron kaming Milk Tea!") as mock_gemini, \
          patch("main.send_dm") as mock_send:
-        response = client.post("/webhook", json=DM_PAYLOAD)
+        response = _signed_post(DM_PAYLOAD)
         assert response.status_code == 200
         mock_gemini.assert_called_once()
         mock_send.assert_called_once_with("tok", "user_123", "Meron kaming Milk Tea!")
@@ -80,7 +99,7 @@ def test_dm_triggers_keyword_rule():
          patch("main.match_rule", return_value="Here is our menu!"), \
          patch("main.generate_reply") as mock_gemini, \
          patch("main.send_dm") as mock_send:
-        response = client.post("/webhook", json=DM_PAYLOAD)
+        response = _signed_post(DM_PAYLOAD)
         assert response.status_code == 200
         mock_gemini.assert_not_called()
         mock_send.assert_called_once_with("tok", "user_123", "Here is our menu!")
@@ -94,7 +113,7 @@ def test_dm_handoff_escalates():
          patch("main.get_or_create_conversation", return_value=CONV_NEW), \
          patch("main.update_conversation") as mock_update, \
          patch("main.send_dm") as mock_send:
-        response = client.post("/webhook", json=payload)
+        response = _signed_post(payload)
         assert response.status_code == 200
         mock_send.assert_called_once_with("tok", "user_123", "Connecting you to our team. Please wait!")
         mock_update.assert_called_once_with("page_111", "user_123", {"status": "escalated"})
@@ -106,19 +125,19 @@ def test_comment_reply_sent():
          patch("main.get_settings", return_value={"welcome_message": None, "handoff_keyword": "human", "comment_reply_mode": "comment"}), \
          patch("main.generate_reply", return_value="Great question!"), \
          patch("main.send_comment_reply") as mock_comment:
-        response = client.post("/webhook", json=COMMENT_PAYLOAD)
+        response = _signed_post(COMMENT_PAYLOAD)
         assert response.status_code == 200
         mock_comment.assert_called_once_with("tok", "cmt_1", "Great question!")
 
 def test_non_page_object_ignored():
     payload = {"object": "instagram", "entry": []}
-    response = client.post("/webhook", json=payload)
+    response = _signed_post(payload)
     assert response.status_code == 200
     assert response.json() == {"status": "ignored"}
 
 def test_unknown_page_skipped():
     with patch("main.get_tenant_by_page_id", return_value=None), \
          patch("main.send_dm") as mock_send:
-        response = client.post("/webhook", json=DM_PAYLOAD)
+        response = _signed_post(DM_PAYLOAD)
         assert response.status_code == 200
         mock_send.assert_not_called()

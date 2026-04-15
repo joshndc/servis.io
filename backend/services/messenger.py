@@ -13,7 +13,7 @@ def send_dm(page_access_token: str, recipient_id: str, message: str) -> dict:
     response = httpx.post(
         url,
         json=payload,
-        params={"access_token": page_access_token},
+        headers={"Authorization": f"Bearer {page_access_token}"},
         timeout=10,
     )
     response.raise_for_status()
@@ -25,7 +25,7 @@ def send_comment_reply(page_access_token: str, comment_id: str, message: str) ->
     response = httpx.post(
         url,
         json={"message": message},
-        params={"access_token": page_access_token},
+        headers={"Authorization": f"Bearer {page_access_token}"},
         timeout=10,
     )
     response.raise_for_status()

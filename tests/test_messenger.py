@@ -35,7 +35,7 @@ def test_send_dm_passes_correct_payload():
         assert kwargs["json"]["recipient"]["id"] == "user456"
         assert kwargs["json"]["message"]["text"] == "Hello!"
         assert kwargs["json"]["messaging_type"] == "RESPONSE"
-        assert kwargs["params"]["access_token"] == "tok123"
+        assert kwargs["headers"]["Authorization"] == "Bearer tok123"
 
 def test_send_comment_reply_calls_graph_api():
     with patch("services.messenger.httpx.post") as mock_post:
@@ -51,4 +51,4 @@ def test_send_comment_reply_passes_correct_payload():
         send_comment_reply("tok123", "comment789", "Thank you!")
         kwargs = mock_post.call_args[1]
         assert kwargs["json"]["message"] == "Thank you!"
-        assert kwargs["params"]["access_token"] == "tok123"
+        assert kwargs["headers"]["Authorization"] == "Bearer tok123"

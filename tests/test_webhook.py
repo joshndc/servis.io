@@ -1,16 +1,33 @@
-from fastapi.testclient import TestClient
 import os
+import hmac
+import hashlib
+import json
+
 os.environ.setdefault("META_WEBHOOK_VERIFY_TOKEN", "test_verify_token")
 os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "fake-key")
 os.environ.setdefault("META_APP_SECRET", "fake-secret")
 os.environ.setdefault("GEMINI_API_KEY", "fake-gemini-key")
 
+from fastapi.testclient import TestClient
 import main
 from main import app
 import config
 
 client = TestClient(app)
+
+
+def _signed_post(payload: dict) -> object:
+    """Post a webhook payload with a valid X-Hub-Signature-256 header."""
+    raw = json.dumps(payload, separators=(",", ":")).encode()
+    sig = "sha256=" + hmac.new(
+        config.META_APP_SECRET.encode(), raw, hashlib.sha256
+    ).hexdigest()
+    return client.post(
+        "/webhook",
+        content=raw,
+        headers={"Content-Type": "application/json", "X-Hub-Signature-256": sig},
+    )
 
 
 def test_webhook_verify_success():
@@ -33,5 +50,15 @@ def test_webhook_verify_wrong_token():
 
 def test_webhook_post_returns_200():
     payload = {"object": "page", "entry": []}
-    response = client.post("/webhook", json=payload)
+    response = _signed_post(payload)
     assert response.status_code == 200
+
+def test_webhook_post_invalid_signature_returns_403():
+    payload = {"object": "page", "entry": []}
+    raw = json.dumps(payload).encode()
+    response = client.post(
+        "/webhook",
+        content=raw,
+        headers={"Content-Type": "application/json", "X-Hub-Signature-256": "sha256=badsig"},
+    )
+    assert response.status_code == 403

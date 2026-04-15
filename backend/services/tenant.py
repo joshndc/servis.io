@@ -54,7 +54,7 @@ def get_or_create_conversation(page_id: str, sender_id: str) -> dict:
                 .eq("sender_id", sender_id)
                 .limit(1)
                 .execute())
-    return existing.data[0]
+    return existing.data[0] if existing.data else {}
 
 def update_conversation(page_id: str, sender_id: str, updates: dict) -> dict:
     result = (get_supabase().table("conversations")
