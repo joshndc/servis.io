@@ -31,10 +31,11 @@ def test_send_dm_passes_correct_payload():
     with patch("services.messenger.httpx.post") as mock_post:
         mock_post.return_value = _mock_response()
         send_dm("tok123", "user456", "Hello!")
-        payload = mock_post.call_args[1]["json"]
-        assert payload["recipient"]["id"] == "user456"
-        assert payload["message"]["text"] == "Hello!"
-        assert payload["messaging_type"] == "RESPONSE"
+        kwargs = mock_post.call_args[1]
+        assert kwargs["json"]["recipient"]["id"] == "user456"
+        assert kwargs["json"]["message"]["text"] == "Hello!"
+        assert kwargs["json"]["messaging_type"] == "RESPONSE"
+        assert kwargs["params"]["access_token"] == "tok123"
 
 def test_send_comment_reply_calls_graph_api():
     with patch("services.messenger.httpx.post") as mock_post:
@@ -48,5 +49,6 @@ def test_send_comment_reply_passes_correct_payload():
     with patch("services.messenger.httpx.post") as mock_post:
         mock_post.return_value = _mock_response()
         send_comment_reply("tok123", "comment789", "Thank you!")
-        payload = mock_post.call_args[1]["json"]
-        assert payload["message"] == "Thank you!"
+        kwargs = mock_post.call_args[1]
+        assert kwargs["json"]["message"] == "Thank you!"
+        assert kwargs["params"]["access_token"] == "tok123"

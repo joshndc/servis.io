@@ -14,6 +14,7 @@ def send_dm(page_access_token: str, recipient_id: str, message: str) -> dict:
         url,
         json=payload,
         params={"access_token": page_access_token},
+        timeout=10,
     )
     response.raise_for_status()
     return response.json()
@@ -25,6 +26,7 @@ def send_comment_reply(page_access_token: str, comment_id: str, message: str) ->
         url,
         json={"message": message},
         params={"access_token": page_access_token},
+        timeout=10,
     )
     response.raise_for_status()
     return response.json()
