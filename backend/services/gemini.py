@@ -5,7 +5,7 @@ from config import ANTHROPIC_API_KEY
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "claude-3-haiku-20240307"
 
 def build_catalog_text(catalog: list[dict]) -> str:
     if not catalog:
@@ -51,6 +51,8 @@ Instructions:
         },
         timeout=30,
     )
+    if not response.is_success:
+        logger.error(f"Anthropic API error {response.status_code}: {response.text}")
     response.raise_for_status()
     data = response.json()
     return data["content"][0]["text"].strip()
