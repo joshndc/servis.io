@@ -1,11 +1,10 @@
-import google.generativeai as genai
+import httpx
 import logging
 from config import GEMINI_API_KEY
 
 logger = logging.getLogger(__name__)
 
-genai.configure(api_key=GEMINI_API_KEY)
-_model = genai.GenerativeModel("gemini-1.5-flash")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
 
 def build_catalog_text(catalog: list[dict]) -> str:
     if not catalog:
@@ -38,5 +37,11 @@ Instructions:
 - Do not make up products not in the catalog
 
 Reply:"""
-    response = _model.generate_content(prompt)
-    return response.text.strip()
+    response = httpx.post(
+        f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+        json={"contents": [{"parts": [{"text": prompt}]}]},
+        timeout=30,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
