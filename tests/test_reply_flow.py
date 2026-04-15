@@ -28,16 +28,33 @@ COMMENT_PAYLOAD = {
     "entry": [{"id": "page_111", "changes": [{"field": "feed", "value": {"item": "comment", "comment_id": "cmt_1", "message": "How much?", "from": {"id": "user_456"}}}]}]
 }
 
-def _mocks(monkeypatch=None, welcome=None, rule_reply=None, gemini_reply="Test reply"):
-    return {
-        "main.get_tenant_by_page_id": PAGE,
-        "main.get_catalog": CATALOG,
-        "main.get_reply_rules": [],
-        "main.get_settings": {"welcome_message": welcome, "handoff_keyword": "human", "comment_reply_mode": "comment"},
-        "main.get_or_create_conversation": CONV_NEW,
-        "main.match_rule": rule_reply,
-        "main.generate_reply": gemini_reply,
-    }
+def test_dm_sends_welcome_on_first_contact():
+    with patch("main.get_tenant_by_page_id", return_value=PAGE), \
+         patch("main.get_catalog", return_value=CATALOG), \
+         patch("main.get_reply_rules", return_value=[]), \
+         patch("main.get_settings", return_value={"welcome_message": "Welcome to our shop! 😊", "handoff_keyword": "human", "comment_reply_mode": "comment"}), \
+         patch("main.get_or_create_conversation", return_value={**CONV_NEW, "detected_language": None}), \
+         patch("main.update_conversation"), \
+         patch("main.match_rule", return_value=None), \
+         patch("main.generate_reply", return_value="Here is our menu!"), \
+         patch("main.send_dm") as mock_send:
+        response = client.post("/webhook", json=DM_PAYLOAD)
+        assert response.status_code == 200
+        # First call should be the welcome message
+        first_call = mock_send.call_args_list[0]
+        assert first_call[0][2] == "Welcome to our shop! 😊"
+
+def test_comment_reply_uses_rule_when_matched():
+    with patch("main.get_tenant_by_page_id", return_value=PAGE), \
+         patch("main.get_catalog", return_value=CATALOG), \
+         patch("main.get_reply_rules", return_value=[{"keyword": "much", "reply_template": "Our prices start at ₱80!"}]), \
+         patch("main.get_settings", return_value={"welcome_message": None, "handoff_keyword": "human", "comment_reply_mode": "comment"}), \
+         patch("main.generate_reply") as mock_gemini, \
+         patch("main.send_comment_reply") as mock_comment:
+        response = client.post("/webhook", json=COMMENT_PAYLOAD)
+        assert response.status_code == 200
+        mock_gemini.assert_not_called()
+        mock_comment.assert_called_once_with("tok", "cmt_1", "Our prices start at ₱80!")
 
 def test_dm_triggers_gemini_reply():
     with patch("main.get_tenant_by_page_id", return_value=PAGE), \
@@ -56,10 +73,11 @@ def test_dm_triggers_gemini_reply():
 def test_dm_triggers_keyword_rule():
     with patch("main.get_tenant_by_page_id", return_value=PAGE), \
          patch("main.get_catalog", return_value=CATALOG), \
-         patch("main.get_reply_rules", return_value=[{"keyword": "menu", "reply_template": "Here is our menu!"}]), \
+         patch("main.get_reply_rules", return_value=[]), \
          patch("main.get_settings", return_value={"welcome_message": None, "handoff_keyword": "human", "comment_reply_mode": "comment"}), \
          patch("main.get_or_create_conversation", return_value=CONV_NEW), \
          patch("main.update_conversation"), \
+         patch("main.match_rule", return_value="Here is our menu!"), \
          patch("main.generate_reply") as mock_gemini, \
          patch("main.send_dm") as mock_send:
         response = client.post("/webhook", json=DM_PAYLOAD)
@@ -78,7 +96,7 @@ def test_dm_handoff_escalates():
          patch("main.send_dm") as mock_send:
         response = client.post("/webhook", json=payload)
         assert response.status_code == 200
-        mock_send.assert_called_once()
+        mock_send.assert_called_once_with("tok", "user_123", "Connecting you to our team. Please wait!")
         mock_update.assert_called_once_with("page_111", "user_123", {"status": "escalated"})
 
 def test_comment_reply_sent():
