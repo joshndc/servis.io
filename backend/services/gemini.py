@@ -1,10 +1,11 @@
 import httpx
 import logging
-from config import GEMINI_API_KEY
+from config import ANTHROPIC_API_KEY
 
 logger = logging.getLogger(__name__)
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent"
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+MODEL = "claude-haiku-4-5-20251001"
 
 def build_catalog_text(catalog: list[dict]) -> str:
     if not catalog:
@@ -34,14 +35,22 @@ Instructions:
 - Reply in the same language. Default to Taglish if unsure.
 - Mention relevant products and prices from the catalog if applicable
 - Keep the reply short, friendly, and helpful
-- Do not make up products not in the catalog
+- Do not make up products not in the catalog"""
 
-Reply:"""
     response = httpx.post(
-        f"{GEMINI_URL}?key={GEMINI_API_KEY}",
-        json={"contents": [{"parts": [{"text": prompt}]}]},
+        ANTHROPIC_URL,
+        headers={
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": MODEL,
+            "max_tokens": 512,
+            "messages": [{"role": "user", "content": prompt}],
+        },
         timeout=30,
     )
     response.raise_for_status()
     data = response.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    return data["content"][0]["text"].strip()
