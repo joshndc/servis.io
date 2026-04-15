@@ -29,6 +29,14 @@ def get_reply_rules(tenant_id: str) -> list:
               .execute())
     return result.data or []
 
+def get_promos(tenant_id: str) -> list:
+    result = (get_supabase().table("promos")
+              .select("*")
+              .eq("tenant_id", tenant_id)
+              .eq("is_active", True)
+              .execute())
+    return result.data or []
+
 def get_settings(tenant_id: str):
     result = (get_supabase().table("settings")
               .select("*")

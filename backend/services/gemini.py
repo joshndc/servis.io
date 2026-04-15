@@ -21,19 +21,33 @@ def build_catalog_text(catalog: list[dict]) -> str:
         lines.append(line)
     return "\n".join(lines)
 
-def generate_reply(message: str, catalog: list[dict]) -> str:
+def build_promos_text(promos: list[dict]) -> str:
+    if not promos:
+        return ""
+    lines = []
+    for p in promos:
+        line = f"- {p['name']}: ₱{p['promo_price']}"
+        if p.get("valid_until"):
+            line += f" (valid until {p['valid_until']})"
+        lines.append(line)
+    return "\n".join(lines)
+
+def generate_reply(message: str, catalog: list[dict], promos: list[dict] = None) -> str:
     catalog_text = build_catalog_text(catalog)
+    promos_text = build_promos_text(promos or [])
+    promo_section = f"\nActive promos:\n{promos_text}" if promos_text else ""
     prompt = f"""You are a friendly customer service assistant for a small Filipino business.
 
 Customer message: {message}
 
 Our catalog:
-{catalog_text}
+{catalog_text}{promo_section}
 
 Instructions:
 - Detect the language of the customer's message (English, Tagalog, Taglish, Bisaya, or other Philippine language)
 - Reply in the same language. Default to Taglish if unsure.
 - Mention relevant products and prices from the catalog if applicable
+- If there are active promos relevant to the customer's question, highlight them
 - Keep the reply short, friendly, and helpful
 - Do not make up products not in the catalog"""
 

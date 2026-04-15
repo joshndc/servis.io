@@ -8,7 +8,7 @@ from typing import Optional
 from config import META_WEBHOOK_VERIFY_TOKEN, META_APP_SECRET, ADMIN_TOKEN
 from services.tenant import (
     get_tenant_by_page_id, get_catalog, get_reply_rules,
-    get_settings, get_or_create_conversation, update_conversation
+    get_settings, get_promos, get_or_create_conversation, update_conversation
 )
 from services.rules import match_rule
 from services.gemini import generate_reply
@@ -57,6 +57,7 @@ async def receive_webhook(request: Request):
             access_token = page["access_token"]
             catalog = get_catalog(tenant_id)
             rules = get_reply_rules(tenant_id)
+            promos = get_promos(tenant_id)
             settings = get_settings(tenant_id) or {}
 
             # Handle DMs
@@ -86,8 +87,8 @@ async def receive_webhook(request: Request):
                     update_conversation(page_id, sender_id, {"last_message": message_text})
                     continue
 
-                # Gemini reply
-                reply = generate_reply(message_text, catalog)
+                # AI reply
+                reply = generate_reply(message_text, catalog, promos)
                 send_dm(access_token, sender_id, reply)
                 update_conversation(page_id, sender_id, {"last_message": message_text, "status": "open"})
 
@@ -103,7 +104,7 @@ async def receive_webhook(request: Request):
                     continue
 
                 mode = settings.get("comment_reply_mode", "comment")
-                reply = match_rule(comment_text, rules) or generate_reply(comment_text, catalog)
+                reply = match_rule(comment_text, rules) or generate_reply(comment_text, catalog, promos)
 
                 if mode == "dm" and commenter_id:
                     send_dm(access_token, commenter_id, reply)
@@ -141,8 +142,8 @@ async def sync_catalog(request: Request):
         service_account = json.loads(raw)
     try:
         from services.sheets import sync_catalog_from_sheet
-        count = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
-        return {"synced": count}
+        counts = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
+        return {"synced": counts}
     except gspread.exceptions.SpreadsheetNotFound:
         raise HTTPException(status_code=400, detail="Sheet not found or not accessible. Check the URL and sharing settings.")
     except Exception as e:
