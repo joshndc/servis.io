@@ -1,4 +1,5 @@
-import os
+import sys, os
+# Stub env vars before any import
 for k, v in {
     "SUPABASE_URL": "https://fake.supabase.co",
     "SUPABASE_SERVICE_ROLE_KEY": "fake-key",
@@ -9,13 +10,20 @@ for k, v in {
 }.items():
     os.environ[k] = os.environ.get(k) or v
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, MagicMock
+from services.orders import create_order, update_order_status, get_pending_orders
 
-def test_create_order_calls_supabase():
-    mock_sb = MagicMock()
-    mock_sb.table.return_value.insert.return_value.execute.return_value.data = [{"id": "order-123"}]
-    with patch("services.orders.get_supabase", return_value=mock_sb):
-        from services.orders import create_order
+
+def _result(data):
+    m = MagicMock()
+    m.data = data
+    return m
+
+
+def test_create_order_returns_inserted_row():
+    with patch("services.orders.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .insert.return_value.execute.return_value) = _result([{"id": "order-123"}])
         result = create_order(
             tenant_id="tenant-1",
             page_id="page-1",
@@ -25,25 +33,24 @@ def test_create_order_calls_supabase():
             items=[{"name": "Milk Tea", "qty": 2, "price": 120}],
             total_price=240,
             pickup_time="3pm",
-            notes="less sugar"
+            notes="less sugar",
         )
         assert result["id"] == "order-123"
 
-def test_update_order_status_calls_supabase():
-    mock_sb = MagicMock()
-    mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value.data = [{"id": "order-123", "status": "approved"}]
-    with patch("services.orders.get_supabase", return_value=mock_sb):
-        from services.orders import update_order_status
+
+def test_update_order_status_returns_updated_row():
+    with patch("services.orders.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .update.return_value.eq.return_value.execute.return_value) = _result([{"id": "order-123", "status": "approved"}])
         result = update_order_status("order-123", "approved")
         assert result["status"] == "approved"
 
+
 def test_get_pending_orders_returns_list():
-    mock_sb = MagicMock()
-    mock_sb.table.return_value.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value.data = [
-        {"id": "order-1", "status": "pending"}
-    ]
-    with patch("services.orders.get_supabase", return_value=mock_sb):
-        from services.orders import get_pending_orders
+    with patch("services.orders.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .select.return_value.eq.return_value.eq.return_value
+         .order.return_value.execute.return_value) = _result([{"id": "order-1", "status": "pending"}])
         result = get_pending_orders("tenant-1")
         assert len(result) == 1
         assert result[0]["id"] == "order-1"
