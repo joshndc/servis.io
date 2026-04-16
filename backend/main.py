@@ -8,29 +8,19 @@ from typing import Optional
 from config import META_WEBHOOK_VERIFY_TOKEN, META_APP_SECRET, ADMIN_TOKEN
 from services.tenant import (
     get_tenant_by_page_id, get_catalog, get_reply_rules,
-    get_settings, get_promos, get_or_create_conversation, update_conversation, append_message
+    get_settings, get_promos, get_or_create_conversation, update_conversation, append_message,
+    get_settings_by_chat_id, update_settings, find_settings_by_connect_code
 )
 from services.rules import match_rule
 from services.gemini import generate_reply, parse_order_from_reply, strip_order_block
 from services.messenger import send_dm, send_comment_reply
 from services.orders import create_order, get_order, update_order_status
 from services.telegram import send_order_notification, send_message, answer_callback_query, edit_message_text
-from services.tenant import get_settings_by_chat_id, update_settings
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="servis.io backend")
-
-def find_settings_by_connect_code(code: str):
-    """Find settings row by telegram_connect_code."""
-    from services.tenant import get_supabase
-    result = (get_supabase().table("settings")
-              .select("*")
-              .eq("telegram_connect_code", code)
-              .limit(1)
-              .execute())
-    return result.data[0] if result.data else None
 
 
 @app.get("/health")
@@ -203,134 +193,143 @@ async def sync_catalog(request: Request):
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
-    body = await request.json()
+    try:
+        body = await request.json()
 
-    # --- Handle inline button callbacks (approve/deny) ---
-    if "callback_query" in body:
-        cq = body["callback_query"]
-        cq_id = cq["id"]
-        chat_id = str(cq["message"]["chat"]["id"])
-        message_id = cq["message"]["message_id"]
-        data = cq.get("data", "")
+        # --- Handle inline button callbacks (approve/deny) ---
+        if "callback_query" in body:
+            cq = body["callback_query"]
+            cq_id = cq["id"]
+            chat_id = str(cq["message"]["chat"]["id"])
+            message_id = cq["message"]["message_id"]
+            data = cq.get("data", "")
 
+            settings = get_settings_by_chat_id(chat_id)
+            if not settings:
+                answer_callback_query(cq_id, "❌ Account not connected.")
+                return {"ok": True}
+
+            if ":" not in data:
+                return {"ok": True}
+
+            action, order_id = data.split(":", 1)
+
+            if action in ("approve", "deny"):
+                status = "approved" if action == "approve" else "denied"
+
+                # Fetch order FIRST before mutating status
+                order = get_order(order_id)
+                update_order_status(order_id, status)  # update after we have order data
+
+                if order:
+                    page = get_tenant_by_page_id(order.get("page_id", ""))
+                    if page:
+                        if status == "approved":
+                            msg = "Great news! Your order has been approved. 🎉 We'll see you soon!"
+                        else:
+                            msg = "We're sorry, your order could not be processed at this time."
+                        send_dm(page["access_token"], order["customer_psid"], msg)
+
+                emoji = "✅" if status == "approved" else "❌"
+                edit_message_text(chat_id, message_id, f"{emoji} Order {status.capitalize()}: #{order_id[:8]}")
+                answer_callback_query(cq_id, f"Order {status}!")
+
+            return {"ok": True}
+
+        # --- Handle text commands ---
+        message = body.get("message", {})
+        chat_id = str(message.get("chat", {}).get("id", ""))
+        text = message.get("text", "").strip()
+
+        if not chat_id or not text:
+            return {"ok": True}
+
+        # /connect <code>
+        if text.startswith("/connect"):
+            parts = text.split(maxsplit=1)
+            code = parts[1].strip() if len(parts) > 1 else ""
+            if not code:
+                send_message(chat_id, "Usage: /connect <your-code>")
+                return {"ok": True}
+            row = find_settings_by_connect_code(code)
+            if row:
+                update_settings(row["tenant_id"], {"telegram_chat_id": chat_id})
+                send_message(chat_id, "✅ Connected! You'll receive order notifications here.")
+            else:
+                send_message(chat_id, "❌ Invalid code. Check your connect code and try again.")
+            return {"ok": True}
+
+        # All other commands require a connected account
         settings = get_settings_by_chat_id(chat_id)
         if not settings:
-            answer_callback_query(cq_id, "❌ Account not connected.")
+            send_message(chat_id, "👋 To connect your account, send: /connect <your-code>")
             return {"ok": True}
 
-        if ":" not in data:
-            return {"ok": True}
+        tenant_id = settings["tenant_id"]
 
-        action, order_id = data.split(":", 1)
-
-        if action in ("approve", "deny"):
-            status = "approved" if action == "approve" else "denied"
-            update_order_status(order_id, status)
-
-            order = get_order(order_id)
-            if order:
-                page = get_tenant_by_page_id(order.get("page_id", ""))
-                if page:
-                    if status == "approved":
-                        msg = "Great news! Your order has been approved. 🎉 We'll see you soon!"
-                    else:
-                        msg = "We're sorry, your order could not be processed at this time."
-                    send_dm(page["access_token"], order["customer_psid"], msg)
-
-            emoji = "✅" if status == "approved" else "❌"
-            edit_message_text(chat_id, message_id, f"{emoji} Order {status.capitalize()}: #{order_id[:8]}")
-            answer_callback_query(cq_id, f"Order {status}!")
-
-        return {"ok": True}
-
-    # --- Handle text commands ---
-    message = body.get("message", {})
-    chat_id = str(message.get("chat", {}).get("id", ""))
-    text = message.get("text", "").strip()
-
-    if not chat_id or not text:
-        return {"ok": True}
-
-    # /connect <code>
-    if text.startswith("/connect"):
-        parts = text.split(maxsplit=1)
-        code = parts[1].strip() if len(parts) > 1 else ""
-        row = find_settings_by_connect_code(code)
-        if row:
-            update_settings(row["tenant_id"], {"telegram_chat_id": chat_id})
-            send_message(chat_id, "✅ Connected! You'll receive order notifications here.")
-        else:
-            send_message(chat_id, "❌ Invalid code. Check your connect code and try again.")
-        return {"ok": True}
-
-    # All other commands require a connected account
-    settings = get_settings_by_chat_id(chat_id)
-    if not settings:
-        send_message(chat_id, "👋 To connect your account, send: /connect <your-code>")
-        return {"ok": True}
-
-    tenant_id = settings["tenant_id"]
-
-    # /sync
-    if text == "/sync":
-        sheet_url = settings.get("google_sheet_id")
-        if not sheet_url:
-            send_message(chat_id, "❌ No Google Sheet configured yet.")
-        else:
-            try:
-                import json as _json
-                from pathlib import Path
-                sa_path = Path(__file__).parent / "service_account.json"
-                if sa_path.exists():
-                    service_account = _json.loads(sa_path.read_text())
-                else:
-                    import os as _os
-                    raw = _os.environ.get("GOOGLE_SERVICE_ACCOUNT")
-                    service_account = _json.loads(raw) if raw else None
-                if not service_account:
-                    send_message(chat_id, "❌ No service account configured.")
-                else:
-                    from services.sheets import sync_catalog_from_sheet
-                    counts = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
-                    send_message(chat_id, f"✅ Synced! Products: {counts.get('products',0)}, Rules: {counts.get('rules',0)}, Promos: {counts.get('promos',0)}")
-            except Exception as e:
-                send_message(chat_id, f"❌ Sync failed: {str(e)}")
-
-    # /break
-    elif text == "/break":
-        update_settings(tenant_id, {"is_on_break": True})
-        send_message(chat_id, "⏸ Break mode ON. AI will reply with a break message.")
-
-    # /back
-    elif text == "/back":
-        update_settings(tenant_id, {"is_on_break": False})
-        send_message(chat_id, "▶️ Back online! AI is responding normally.")
-
-    # /cancel <order_id>
-    elif text.startswith("/cancel"):
-        parts = text.split(maxsplit=1)
-        if len(parts) < 2:
-            send_message(chat_id, "Usage: /cancel <order_id>")
-        else:
-            order_id = parts[1].strip()
-            order = get_order(order_id)
-            if not order:
-                send_message(chat_id, "❌ Order not found.")
+        # /sync
+        if text == "/sync":
+            sheet_url = settings.get("google_sheet_id")
+            if not sheet_url:
+                send_message(chat_id, "❌ No Google Sheet configured yet.")
             else:
-                update_order_status(order_id, "cancelled")
-                page = get_tenant_by_page_id(order.get("page_id", ""))
-                if page:
-                    send_dm(page["access_token"], order["customer_psid"],
-                            "We're sorry, your order has been cancelled. Feel free to order again! 😊")
-                send_message(chat_id, f"✅ Order #{order_id[:8]} cancelled.")
+                try:
+                    import json as _json
+                    from pathlib import Path
+                    sa_path = Path(__file__).parent / "service_account.json"
+                    if sa_path.exists():
+                        service_account = _json.loads(sa_path.read_text())
+                    else:
+                        import os as _os
+                        raw = _os.environ.get("GOOGLE_SERVICE_ACCOUNT")
+                        service_account = _json.loads(raw) if raw else None
+                    if not service_account:
+                        send_message(chat_id, "❌ No service account configured.")
+                    else:
+                        from services.sheets import sync_catalog_from_sheet
+                        counts = sync_catalog_from_sheet(tenant_id, sheet_url, service_account)
+                        send_message(chat_id, f"✅ Synced! Products: {counts.get('products',0)}, Rules: {counts.get('rules',0)}, Promos: {counts.get('promos',0)}")
+                except Exception as e:
+                    send_message(chat_id, f"❌ Sync failed: {str(e)}")
 
-    # /status
-    elif text == "/status":
-        from services.orders import get_pending_orders
-        pending = get_pending_orders(tenant_id)
-        send_message(chat_id, f"📊 Status\n🛒 Pending orders: {len(pending)}")
+        # /break
+        elif text == "/break":
+            update_settings(tenant_id, {"is_on_break": True})
+            send_message(chat_id, "⏸ Break mode ON. AI will reply with a break message.")
 
-    else:
-        send_message(chat_id, "Commands: /sync /break /back /cancel <id> /status")
+        # /back
+        elif text == "/back":
+            update_settings(tenant_id, {"is_on_break": False})
+            send_message(chat_id, "▶️ Back online! AI is responding normally.")
 
-    return {"ok": True}
+        # /cancel <order_id>
+        elif text.startswith("/cancel"):
+            parts = text.split(maxsplit=1)
+            if len(parts) < 2:
+                send_message(chat_id, "Usage: /cancel <order_id>")
+            else:
+                order_id = parts[1].strip()
+                order = get_order(order_id)
+                if not order:
+                    send_message(chat_id, "❌ Order not found.")
+                else:
+                    update_order_status(order_id, "cancelled")
+                    page = get_tenant_by_page_id(order.get("page_id", ""))
+                    if page:
+                        send_dm(page["access_token"], order["customer_psid"],
+                                "We're sorry, your order has been cancelled. Feel free to order again! 😊")
+                    send_message(chat_id, f"✅ Order #{order_id[:8]} cancelled.")
+
+        # /status
+        elif text == "/status":
+            from services.orders import get_pending_orders
+            pending = get_pending_orders(tenant_id)
+            send_message(chat_id, f"📊 Status\n🛒 Pending orders: {len(pending)}")
+
+        else:
+            send_message(chat_id, "Commands: /sync /break /back /cancel <id> /status")
+
+        return {"ok": True}
+    except Exception as exc:
+        logger.error(f"Error processing Telegram update: {exc}", exc_info=True)
+        return {"ok": True}  # Always return 200 to Telegram to prevent retries

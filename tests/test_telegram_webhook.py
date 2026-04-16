@@ -61,6 +61,14 @@ def test_telegram_connect_wrong_code(mocker):
     mock_send.assert_called_with("chat-123", "❌ Invalid code. Check your connect code and try again.")
 
 
+def test_telegram_connect_empty_code(mocker):
+    mock_send = mocker.patch("main.send_message")
+
+    response = client.post("/telegram", json=_tg_update("/connect"))
+    assert response.status_code == 200
+    mock_send.assert_called_with("chat-123", "Usage: /connect <your-code>")
+
+
 def test_telegram_approve_callback(mocker):
     mocker.patch("main.get_settings_by_chat_id", return_value={
         "tenant_id": "t1", "telegram_chat_id": "chat-123"

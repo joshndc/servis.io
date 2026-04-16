@@ -94,3 +94,25 @@ def test_update_settings_calls_supabase():
         from services.tenant import update_settings
         result = update_settings("t1", {"is_on_break": True})
         assert result["is_on_break"] is True
+
+
+def test_find_settings_by_connect_code_found():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .select.return_value.eq.return_value.limit.return_value
+         .execute.return_value) = _result([{"tenant_id": "t1", "telegram_connect_code": "servis-abc123"}])
+        from services.tenant import find_settings_by_connect_code
+        result = find_settings_by_connect_code("servis-abc123")
+        assert result is not None
+        assert result["tenant_id"] == "t1"
+        assert result["telegram_connect_code"] == "servis-abc123"
+
+
+def test_find_settings_by_connect_code_not_found():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .select.return_value.eq.return_value.limit.return_value
+         .execute.return_value) = _result([])
+        from services.tenant import find_settings_by_connect_code
+        result = find_settings_by_connect_code("bad-code")
+        assert result is None

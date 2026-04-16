@@ -104,3 +104,13 @@ def update_settings(tenant_id: str, updates: dict) -> dict:
               .eq("tenant_id", tenant_id)
               .execute())
     return result.data[0] if result.data else {}
+
+
+def find_settings_by_connect_code(code: str):
+    """Find settings row by telegram_connect_code."""
+    result = (get_supabase().table("settings")
+              .select("*")
+              .eq("telegram_connect_code", code)
+              .limit(1)
+              .execute())
+    return result.data[0] if result.data else None
