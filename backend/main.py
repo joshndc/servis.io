@@ -82,6 +82,11 @@ async def receive_webhook(request: Request):
                     update_conversation(page_id, sender_id, {"status": "escalated"})
                     continue
 
+                # Break mode check
+                if settings.get("is_on_break"):
+                    send_dm(access_token, sender_id, "We're on a break right now. We'll be back soon! 😊")
+                    continue
+
                 # Keyword rule match
                 rule_reply = match_rule(message_text, rules)
                 if rule_reply:
