@@ -16,7 +16,10 @@ def send_message(chat_id: str, text: str) -> dict:
     )
     if not response.is_success:
         logger.error(f"Telegram sendMessage failed: {response.text}")
-    return response.json()
+    try:
+        return response.json()
+    except Exception:
+        return {}
 
 
 def send_order_notification(chat_id: str, order: dict) -> dict:
@@ -55,7 +58,10 @@ def send_order_notification(chat_id: str, order: dict) -> dict:
     )
     if not response.is_success:
         logger.error(f"Telegram order notification failed: {response.text}")
-    return response.json()
+    try:
+        return response.json()
+    except Exception:
+        return {}
 
 
 def edit_message_text(chat_id: str, message_id: int, text: str) -> dict:
@@ -65,7 +71,12 @@ def edit_message_text(chat_id: str, message_id: int, text: str) -> dict:
         json={"chat_id": chat_id, "message_id": message_id, "text": text},
         timeout=10,
     )
-    return response.json()
+    if not response.is_success:
+        logger.error(f"Telegram editMessageText failed: {response.text}")
+    try:
+        return response.json()
+    except Exception:
+        return {}
 
 
 def answer_callback_query(callback_query_id: str, text: str) -> dict:
@@ -75,4 +86,9 @@ def answer_callback_query(callback_query_id: str, text: str) -> dict:
         json={"callback_query_id": callback_query_id, "text": text},
         timeout=10,
     )
-    return response.json()
+    if not response.is_success:
+        logger.error(f"Telegram answerCallbackQuery failed: {response.text}")
+    try:
+        return response.json()
+    except Exception:
+        return {}
