@@ -6,8 +6,10 @@ for k, v in {
     "META_APP_SECRET": "fake-secret",
     "META_WEBHOOK_VERIFY_TOKEN": "fake-token",
     "GEMINI_API_KEY": "fake-gemini",
+    "ANTHROPIC_API_KEY": "fake-anthropic",
+    "TELEGRAM_BOT_TOKEN": "fake-telegram",
 }.items():
-    os.environ.setdefault(k, v)
+    os.environ[k] = os.environ.get(k) or v
 
 from unittest.mock import patch, MagicMock
 from services.tenant import get_tenant_by_page_id, get_catalog, get_reply_rules, get_or_create_conversation, get_settings
@@ -73,3 +75,21 @@ def test_update_conversation():
         from services.tenant import update_conversation
         result = update_conversation("p1", "s1", {"status": "escalated"})
         assert result["status"] == "escalated"
+
+def test_get_settings_by_chat_id_returns_row():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .select.return_value.eq.return_value.limit.return_value
+         .execute.return_value) = _result([{"tenant_id": "t1", "telegram_chat_id": "chat-999"}])
+        from services.tenant import get_settings_by_chat_id
+        result = get_settings_by_chat_id("chat-999")
+        assert result["tenant_id"] == "t1"
+
+def test_update_settings_calls_supabase():
+    with patch("services.tenant.get_supabase") as mock_sb:
+        (mock_sb.return_value.table.return_value
+         .update.return_value.eq.return_value
+         .execute.return_value) = _result([{"tenant_id": "t1", "is_on_break": True}])
+        from services.tenant import update_settings
+        result = update_settings("t1", {"is_on_break": True})
+        assert result["is_on_break"] is True

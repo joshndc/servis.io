@@ -86,3 +86,21 @@ def append_message(page_id: str, sender_id: str, role: str, text: str):
     history.append({"role": role, "text": text})
     history = history[-10:]  # keep last 10 messages
     get_supabase().table("conversations").update({"message_history": history}).eq("page_id", page_id).eq("sender_id", sender_id).execute()
+
+def get_settings_by_chat_id(chat_id: str):
+    """Look up settings row by telegram_chat_id."""
+    result = (get_supabase().table("settings")
+              .select("*")
+              .eq("telegram_chat_id", chat_id)
+              .limit(1)
+              .execute())
+    return result.data[0] if result.data else None
+
+
+def update_settings(tenant_id: str, updates: dict) -> dict:
+    """Partial update of a settings row."""
+    result = (get_supabase().table("settings")
+              .update(updates)
+              .eq("tenant_id", tenant_id)
+              .execute())
+    return result.data[0] if result.data else {}
