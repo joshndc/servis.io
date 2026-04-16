@@ -1,4 +1,4 @@
-import sys, os
+import os
 # Stub env vars before any import
 for k, v in {
     "SUPABASE_URL": "https://fake.supabase.co",
