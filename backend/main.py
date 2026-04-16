@@ -119,7 +119,7 @@ async def receive_webhook(request: Request):
                         notes=order_data.get("notes"),
                     )
                     tg_chat_id = settings.get("telegram_chat_id")
-                    if tg_chat_id and order:
+                    if tg_chat_id and order.get("id"):
                         send_order_notification(tg_chat_id, order)
 
                 send_dm(access_token, sender_id, clean_reply)
