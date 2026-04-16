@@ -11,8 +11,10 @@ from services.tenant import (
     get_settings, get_promos, get_or_create_conversation, update_conversation, append_message
 )
 from services.rules import match_rule
-from services.gemini import generate_reply
+from services.gemini import generate_reply, parse_order_from_reply, strip_order_block
 from services.messenger import send_dm, send_comment_reply
+from services.orders import create_order
+from services.telegram import send_order_notification
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -98,9 +100,30 @@ async def receive_webhook(request: Request):
 
                 # AI reply with conversation history
                 append_message(page_id, sender_id, "user", message_text)
-                reply = generate_reply(message_text, catalog, promos, history)
-                send_dm(access_token, sender_id, reply)
-                append_message(page_id, sender_id, "assistant", reply)
+                raw_reply = generate_reply(message_text, catalog, promos, history)
+
+                # Detect and handle confirmed order
+                order_data = parse_order_from_reply(raw_reply)
+                clean_reply = strip_order_block(raw_reply)
+
+                if order_data:
+                    order = create_order(
+                        tenant_id=tenant_id,
+                        page_id=page_id,
+                        sender_id=sender_id,
+                        sender_name=order_data["name"],
+                        contact_number=order_data["contact"],
+                        items=order_data["items"],
+                        total_price=order_data["total"],
+                        pickup_time=order_data.get("pickup_time"),
+                        notes=order_data.get("notes"),
+                    )
+                    tg_chat_id = settings.get("telegram_chat_id")
+                    if tg_chat_id and order:
+                        send_order_notification(tg_chat_id, order)
+
+                send_dm(access_token, sender_id, clean_reply)
+                append_message(page_id, sender_id, "assistant", clean_reply)
                 update_conversation(page_id, sender_id, {"last_message": message_text, "status": "open"})
 
             # Handle comments
