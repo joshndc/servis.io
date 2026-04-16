@@ -1,15 +1,16 @@
 import sys, os
 # Stub env vars before any import
-for k, v in {
-    "SUPABASE_URL": "https://fake.supabase.co",
-    "SUPABASE_SERVICE_ROLE_KEY": "fake-key",
-    "META_APP_SECRET": "fake-secret",
-    "META_WEBHOOK_VERIFY_TOKEN": "fake-token",
-    "GEMINI_API_KEY": "fake-gemini",
-    "ANTHROPIC_API_KEY": "fake-anthropic",
-    "TELEGRAM_BOT_TOKEN": "fake-telegram",
-}.items():
-    os.environ[k] = os.environ.get(k) or v
+# Remove empty-string vars so setdefault can fill them in
+for _k in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "META_APP_SECRET",
+           "META_WEBHOOK_VERIFY_TOKEN", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN"):
+    if not os.environ.get(_k):
+        os.environ.pop(_k, None)
+os.environ.setdefault("SUPABASE_URL", "https://fake.supabase.co")
+os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "fake-key")
+os.environ.setdefault("META_APP_SECRET", "fake-secret")
+os.environ.setdefault("META_WEBHOOK_VERIFY_TOKEN", "fake-token")
+os.environ.setdefault("ANTHROPIC_API_KEY", "fake-key")
+os.environ.setdefault("TELEGRAM_BOT_TOKEN", "fake-token")
 
 from unittest.mock import patch, MagicMock
 from services.tenant import get_tenant_by_page_id, get_catalog, get_reply_rules, get_or_create_conversation, get_settings
