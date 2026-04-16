@@ -1,10 +1,16 @@
 import os
-os.environ["SUPABASE_URL"] = "https://fake.supabase.co"
-os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "fake-key"
-os.environ["META_APP_SECRET"] = "fake-secret"
-os.environ["META_WEBHOOK_VERIFY_TOKEN"] = "fake-token"
-os.environ["ANTHROPIC_API_KEY"] = "fake-anthropic-key"
-os.environ["TELEGRAM_BOT_TOKEN"] = "fake-telegram-token"
+
+_defaults = {
+    "SUPABASE_URL": "https://fake.supabase.co",
+    "SUPABASE_SERVICE_ROLE_KEY": "fake-key",
+    "META_APP_SECRET": "fake-secret",
+    "META_WEBHOOK_VERIFY_TOKEN": "fake-token",
+    "ANTHROPIC_API_KEY": "fake-anthropic-key",
+    "TELEGRAM_BOT_TOKEN": "fake-telegram-token",
+}
+for _k, _v in _defaults.items():
+    if not os.environ.get(_k):
+        os.environ[_k] = _v
 
 import importlib
 import config as _config_module
