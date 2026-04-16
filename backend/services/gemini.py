@@ -65,7 +65,7 @@ def parse_order_from_reply(reply: str) -> dict | None:
         if ':' in line:
             key, _, val = line.partition(':')
             data[key.strip()] = val.strip()
-    items_str = data.get("items", "")
+    items_str = data.get("items", "").strip()
     return {
         "name": data.get("name", ""),
         "contact": data.get("contact", ""),
@@ -161,8 +161,6 @@ IMPORTANT RULES:
 ---
 
 Your role is not just to answer — it is to assist, guide, and convert.
-
----
 
 ---
 
